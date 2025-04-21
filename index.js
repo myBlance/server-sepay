@@ -1,7 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const http = require('http');
+const { Server } = require('socket.io');
+
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: { origin: '*' },
+});
 
 app.use(cors());
 app.use(express.json());
@@ -10,6 +17,25 @@ const PORT = 4000;
 const orders = {};
 
 const SEPAY_API_KEY = '1QUOLYUEX2PV9FPFMBTRS5GKTXHWFVDMXDYPJBHBQK4ESISLACMQYGZCIZDYNJWN';
+
+// Socket.IO
+io.on('connection', (socket) => {
+    console.log('Client connected:', socket.id);
+
+    socket.on('join_order', (orderId) => {
+        socket.join(orderId);
+        console.log(`📦 Client joined room: ${orderId}`);
+    });
+
+    socket.on('leave_order', (orderId) => {
+        socket.leave(orderId);
+        console.log(`Client left room: ${orderId}`);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('❌ Client disconnected:', socket.id);
+    });
+});
 
 // ✅ API tạo đơn hàng mới
 app.post('/api/create-order', (req, res) => {
@@ -77,6 +103,9 @@ app.post('/api/check-payment-status', async (req, res) => {
         if (result && result.status === 'PAID') {
             order.status = 'Paid';
             console.log(`✅ Đơn hàng ${orderId} đã thanh toán.`);
+
+            // Gửi sự kiện socket tới client
+            io.to(orderId).emit('order_paid', { orderId });
         }
     }
 
@@ -115,11 +144,15 @@ app.post('/api/webhook', (req, res) => {
     if (transferAmount > 0 && order.status !== 'Paid') {
         order.status = 'Paid';
         console.log(`✅ Đơn hàng ${orderId} cập nhật sang Paid qua webhook.`);
+
+        //Gửi socket nếu webhook xác nhận thành công
+        io.to(orderId).emit('order_paid', { orderId });
     }
 
     res.json({ message: 'Webhook đã xử lý thành công.' });
 });
 
-app.listen(PORT, () => {
+// Start server kèm socket
+server.listen(PORT, () => {
     console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
 });
