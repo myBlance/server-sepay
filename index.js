@@ -1,17 +1,15 @@
-require('dotenv').config(); // Load biến môi trường từ .env
-
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const app = express();
 
 app.use(cors());
-app.use(express.json()); // Cho phép đọc JSON từ body
+app.use(express.json());
 
 const PORT = 4000;
-const orders = {}; // Lưu trữ đơn hàng tạm thời trong RAM
+const orders = {};
 
-const SEPAY_API_KEY = process.env.SEPAY_API_KEY;
+const SEPAY_API_KEY = '1QUOLYUEX2PV9FPFMBTRS5GKTXHWFVDMXDYPJBHBQK4ESISLACMQYGZCIZDYNJWN';
 
 // ✅ API tạo đơn hàng mới
 app.post('/api/create-order', (req, res) => {
@@ -41,11 +39,9 @@ app.post('/api/create-order', (req, res) => {
     });
 });
 
-// ✅ Gọi API SePay kiểm tra giao dịch theo addInfo (orderId)
+// ✅ Gọi API SePay để tìm giao dịch qua orderId
 async function checkWithSePay(orderId) {
     try {
-        console.log(`🔍 Gọi SePay tìm theo addInfo: ${orderId}`);
-        
         const res = await axios.get(`https://my.sepay.vn/userapi/transactions/search?addInfo=${orderId}`, {
             headers: {
                 Authorization: `Bearer ${SEPAY_API_KEY}`,
@@ -53,26 +49,20 @@ async function checkWithSePay(orderId) {
             }
         });
 
-        console.log('📦 Dữ liệu trả về từ SePay:', res.data);
-
-        const transaction = res.data?.data?.[0]; // Lấy giao dịch đầu tiên nếu có
-        return transaction || null;
+        if (res.data?.success && res.data?.data?.length > 0) {
+            return res.data.data[0]; // ✅ Trả về giao dịch đầu tiên
+        } else {
+            console.log(`⚠️ SePay trả về success: false hoặc không có dữ liệu cho ${orderId}`);
+            return null;
+        }
 
     } catch (err) {
-        if (err.response) {
-            console.error('❌ Lỗi khi gọi SePay:');
-            console.error('Status:', err.response.status);
-            console.error('Headers:', err.response.headers);
-            console.error('Data:', err.response?.data || 'Không có dữ liệu phản hồi');
-        } else {
-            console.error('❌ Lỗi không có phản hồi từ SePay:', err.message);
-        }
-        
+        console.error('❌ Lỗi khi gọi SePay:', err.response?.data || err.message);
         return null;
     }
 }
 
-// ✅ API kiểm tra trạng thái thanh toán đơn hàng
+// ✅ Kiểm tra trạng thái thanh toán đơn hàng
 app.post('/api/check-payment-status', async (req, res) => {
     const { orderId } = req.body;
 
@@ -86,7 +76,7 @@ app.post('/api/check-payment-status', async (req, res) => {
 
         if (result && result.status === 'PAID') {
             order.status = 'Paid';
-            console.log(`✅ Đơn hàng ${orderId} đã thanh toán (SePay xác nhận).`);
+            console.log(`✅ Đơn hàng ${orderId} đã thanh toán.`);
         }
     }
 
@@ -98,37 +88,38 @@ app.post('/api/check-payment-status', async (req, res) => {
     });
 });
 
-// ✅ API xem tất cả đơn hàng đang lưu
+// ✅ Xem tất cả đơn hàng
 app.get('/api/orders', (req, res) => {
     res.json(orders);
 });
 
-// ✅ API nhận webhook từ SePay
+// ✅ Nhận webhook từ SePay
 app.post('/api/webhook', (req, res) => {
     const data = req.body;
-
     console.log('📩 Nhận webhook từ SePay:', data);
 
-    const { addInfo, status } = data;
-
-    if (!addInfo || !status) {
-        return res.status(400).json({ message: 'Thiếu addInfo hoặc status trong dữ liệu webhook.' });
+    const content = data.content || data.description || '';
+    const transferAmount = data.transferAmount;
+    const match = content.match(/ORDER\d+/);
+    if (!match) {
+        return res.status(400).json({ message: 'Không tìm thấy orderId trong nội dung.' });
     }
 
-    const order = orders[addInfo];
+    const orderId = match[0];
+    const order = orders[orderId];
+
     if (!order) {
-        return res.status(404).json({ message: `Không tìm thấy đơn hàng với addInfo: ${addInfo}` });
+        return res.status(404).json({ message: `Không tìm thấy đơn hàng với orderId: ${orderId}` });
     }
 
-    if (status === 'PAID') {
+    if (transferAmount > 0 && order.status !== 'Paid') {
         order.status = 'Paid';
-        console.log(`✅ Đơn hàng ${addInfo} đã cập nhật sang Paid qua webhook.`);
+        console.log(`✅ Đơn hàng ${orderId} cập nhật sang Paid qua webhook.`);
     }
 
     res.json({ message: 'Webhook đã xử lý thành công.' });
 });
 
-// ✅ Khởi động server
 app.listen(PORT, () => {
     console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
 });
