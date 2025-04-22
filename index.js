@@ -6,8 +6,13 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
+
 const io = new Server(server, {
-    cors: { origin: '*' },
+    cors: {
+        origin: ['https://netflix-test-flame.vercel.app'],
+        methods: ['GET', 'POST'],
+        credentials: true,
+    },
 });
 
 app.use(cors({
