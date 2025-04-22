@@ -154,3 +154,8 @@ app.post('/api/webhook', (req, res) => {
     res.json({ message: 'Webhook đã xử lý thành công.' });
 });
 
+
+const PORT = process.env.PORT || 4000; // Sử dụng PORT từ hệ thống hoặc cổng mặc định là 4000
+server.listen(PORT, () => {
+    console.log(`Server đang chạy tại http://localhost:${PORT}`);
+});
