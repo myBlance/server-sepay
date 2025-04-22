@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
+const allowedOrigins = ['https://netflix-test-flame.vercel.app'];
 
 const io = new Server(server, {
     cors: {
@@ -16,9 +17,16 @@ const io = new Server(server, {
 });
 
 app.use(cors({
-    origin: 'https://netflix-test-flame.vercel.app/', // domain frontend trên Vercel/Netlify
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Không cho phép CORS từ domain này'));
+        }
+    },
     credentials: true
 }));
+
 app.use(express.json());
 
 const orders = {};
