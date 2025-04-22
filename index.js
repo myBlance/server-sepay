@@ -10,10 +10,12 @@ const io = new Server(server, {
     cors: { origin: '*' },
 });
 
-app.use(cors());
+app.use(cors({
+    origin: 'https://netflix-test-flame.vercel.app/', // domain frontend trên Vercel/Netlify
+    credentials: true
+}));
 app.use(express.json());
 
-const PORT = 4000;
 const orders = {};
 
 const SEPAY_API_KEY = '1QUOLYUEX2PV9FPFMBTRS5GKTXHWFVDMXDYPJBHBQK4ESISLACMQYGZCIZDYNJWN';
@@ -152,7 +154,3 @@ app.post('/api/webhook', (req, res) => {
     res.json({ message: 'Webhook đã xử lý thành công.' });
 });
 
-// Start server kèm socket
-server.listen(PORT, () => {
-    console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
-});
